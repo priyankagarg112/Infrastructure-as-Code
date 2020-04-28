@@ -1,0 +1,11 @@
+1. Create Stack
+$ bash create.sh udagram-stack udagram-script.yml udagram-params.json 
+
+2. Update Stack
+$ bash update.sh udagram-stack udagram-script.yml udagram-params.json 
+
+3. Delete Stack
+$ bash delete.sh udagram-stack
+
+
+

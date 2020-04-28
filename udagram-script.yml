@@ -1,0 +1,369 @@
+Parameters:
+        EnvironmentName:
+                Description: Tis is the environment name.
+                Type: String
+
+        VpcCIDR:
+                Description: Please enter the IP range (CIDR notation) for this
+                Type: String
+                Default: 10.0.0.0/16
+
+        PublicSubnet1CIDR:
+                Description: Please enter the IP range (CIDR notation) for this
+                Type: String
+                Default: 10.0.0.0/24
+
+        PublicSubnet2CIDR:
+                Description: Please enter the IP range (CIDR notation) for this
+                Type: String
+                Default: 10.0.1.0/24
+
+        PrivateSubnet1CIDR:
+                Description: Please enter the IP range (CIDR notation) for this
+                Type: String
+                Default: 10.0.2.0/24
+
+        PrivateSubnet2CIDR:
+                Description: Please enter the IP range (CIDR notation) for this
+                Type: String
+                Default: 10.0.3.0/24                
+
+                
+
+Resources:
+        VPC:
+                Type: AWS::EC2::VPC
+                Properties:
+                        CidrBlock: !Ref VpcCIDR
+                        EnableDnsHostnames: true
+                        Tags:
+                                - Key: Name
+                                  Value: !Ref EnvironmentName
+
+        InternetGateway:
+                Type: AWS::EC2::InternetGateway
+                Properties:
+                        Tags:
+                                - Key: Name
+                                  Value: !Ref EnvironmentName
+
+        InternetGatewayAttachment:                
+                Type: AWS::EC2::VPCGatewayAttachment
+                Properties:
+                        VpcId: !Ref VPC
+                        InternetGatewayId: !Ref InternetGateway
+
+        PublicSubnet1:
+                Type: AWS::EC2::Subnet
+                Properties:
+                        VpcId: !Ref VPC
+                        CidrBlock: !Ref PublicSubnet1CIDR
+                        MapPublicIpOnLaunch: true
+                        AvailabilityZone: !Select [0, !GetAZs '']
+                        Tags:
+                                - Key: Name
+                                  Value: !Sub ${EnvironmentName} PubSub(AZ1)
+
+        PublicSubnet2:
+                Type: AWS::EC2::Subnet
+                Properties:
+                        VpcId: !Ref VPC
+                        CidrBlock: !Ref PublicSubnet2CIDR
+                        AvailabilityZone: !Select [1, !GetAZs '']
+                        MapPublicIpOnLaunch: true
+                        Tags:
+                                - Key: Name
+                                  Value: !Sub ${EnvironmentName} PubSub(AZ2)
+
+        PrivateSubnet1:
+                Type: AWS::EC2::Subnet
+                Properties:
+                        VpcId: !Ref VPC
+                        CidrBlock: !Ref PrivateSubnet1CIDR
+                        AvailabilityZone: !Select [0, !GetAZs '']
+                        MapPublicIpOnLaunch: false
+                        Tags:
+                                - Key: Name
+                                  Value: !Sub ${EnvironmentName} PrivSub(AZ1)
+
+        PrivateSubnet2:
+                Type: AWS::EC2::Subnet
+                Properties:
+                        VpcId: !Ref VPC
+                        CidrBlock: !Ref PrivateSubnet2CIDR
+                        MapPublicIpOnLaunch: false
+                        AvailabilityZone: !Select [1, !GetAZs '']
+                        Tags:
+                                - Key: Name
+                                  Value: !Sub ${EnvironmentName} PrivSub(AZ2)
+
+        NatGateway1:
+                Type: AWS::EC2::NatGateway
+                Properties:
+                        SubnetId: !Ref PublicSubnet1
+                        AllocationId: !GetAtt NatGateway1EIP.AllocationId
+
+        NatGateway2:
+                Type: AWS::EC2::NatGateway
+                Properties:
+                        SubnetId: !Ref PublicSubnet2
+                        AllocationId: !GetAtt NatGateway2EIP.AllocationId
+
+        NatGateway1EIP:
+                Type: AWS::EC2::EIP
+                DependsOn: InternetGatewayAttachment
+                Properties:
+                        Domain: vpc
+
+        NatGateway2EIP:
+                Type: AWS::EC2::EIP
+                DependsOn: InternetGatewayAttachment
+                Properties:
+                        Domain: vpc                        
+                        
+        
+        PublicRouteTable:
+                Type: AWS::EC2::RouteTable
+                Properties:
+                        VpcId: !Ref VPC
+                        Tags:
+                                - Key: Name
+                                  Value: !Sub ${EnvironmentName} Public RT
+
+        PublicRoute:
+                Type: AWS::EC2::Route
+                Properties:
+                        DestinationCidrBlock: 0.0.0.0/0
+                        RouteTableId: !Ref PublicRouteTable
+                        GatewayId: !Ref InternetGateway
+
+        PublicSubnet1RouteTableAssociation:
+                Type: AWS::EC2::SubnetRouteTableAssociation
+                Properties:
+                        SubnetId: !Ref PublicSubnet1
+                        RouteTableId: !Ref PublicRouteTable
+
+        PublicSubnet2RouteTableAssociation:
+                Type: AWS::EC2::SubnetRouteTableAssociation
+                Properties:
+                        SubnetId: !Ref PublicSubnet2
+                        RouteTableId: !Ref PublicRouteTable
+                                        
+        PrivateRouteTable1:
+                Type: AWS::EC2::RouteTable
+                Properties:
+                        VpcId: !Ref VPC
+                        Tags:
+                                - Key: Name
+                                  Value: !Sub ${EnvironmentName} Private RT
+
+        PrivateRoute1:
+                Type: AWS::EC2::Route
+                Properties:
+                        DestinationCidrBlock: 0.0.0.0/0
+                        RouteTableId: !Ref PrivateRouteTable1
+                        NatGatewayId: !Ref NatGateway1
+
+        PrivateSubnet1RouteTableAssociation:
+                Type: AWS::EC2::SubnetRouteTableAssociation
+                Properties:
+                        SubnetId: !Ref PrivateSubnet1
+                        RouteTableId: !Ref PrivateRouteTable1
+
+        PrivateRouteTable2:
+                Type: AWS::EC2::RouteTable
+                Properties:
+                        VpcId: !Ref VPC
+                        Tags:
+                                - Key: Name
+                                  Value: !Sub ${EnvironmentName} Private RT
+
+        PrivateRoute2:
+                Type: AWS::EC2::Route
+                Properties:
+                        DestinationCidrBlock: 0.0.0.0/0
+                        RouteTableId: !Ref PrivateRouteTable2
+                        NatGatewayId: !Ref NatGateway2
+
+        PrivateSubnet2RouteTableAssociation:
+                Type: AWS::EC2::SubnetRouteTableAssociation
+                Properties:
+                        SubnetId: !Ref PrivateSubnet2
+                        RouteTableId: !Ref PrivateRouteTable2
+                
+        LBSecGroup:
+                Type: AWS::EC2::SecurityGroup
+                Properties:
+                        GroupDescription: Allow all http requests to load balancer
+                        VpcId: !Ref VPC
+                        SecurityGroupIngress:
+                                - IpProtocol: tcp
+                                  FromPort: 80
+                                  ToPort: 80
+                                  CidrIp: 0.0.0.0/0
+                                
+                        SecurityGroupEgress:
+                                - IpProtocol: tcp
+                                  FromPort: 80
+                                  ToPort: 80
+                                  CidrIp: 0.0.0.0/0
+
+        InstanceSecGroup:
+                Type: AWS::EC2::SecurityGroup
+                Properties:
+                        GroupDescription: Allow http request to the host.
+                        VpcId: !Ref VPC
+                        SecurityGroupIngress:
+                                - IpProtocol: tcp
+                                  FromPort: 80
+                                  ToPort: 80
+                                  CidrIp: 0.0.0.0/0
+
+                        SecurityGroupEgress:
+                                - IpProtocol: tcp
+                                  FromPort: 0
+                                  ToPort: 65535
+                                  CidrIp: 0.0.0.0/0
+
+
+        WALoadBalancer:
+                Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+                Properties:
+                        Subnets:
+                                - Ref: PublicSubnet1
+                                - Ref: PublicSubnet2
+                        SecurityGroups:
+                                - Ref: LBSecGroup
+                        LoadBalancerAttributes:
+                                - Key: 'idle_timeout.timeout_seconds'
+                                  Value: 120
+
+        LaunchConfig:
+                Type: AWS::AutoScaling::LaunchConfiguration
+                Properties:
+                        UserData:
+                                Fn::Base64: !Sub |
+                                  #!/bin/bash
+                                  apt-get update -y
+                                  apt-get install unzip awscli -y
+                                  apt-get install apache2 -y
+                                  systemctl start apache2.service
+                                  cd /var/www/html
+                                  aws s3 cp s3://udagram-demo/index.zip .
+                                  unzip -o index.zip
+                                  systemctl restart apache2.service
+                        BlockDeviceMappings:
+                                - DeviceName: "/dev/sdk"
+                                  Ebs:
+                                          VolumeSize: "10"
+                        InstanceType: t3.small
+                        ImageId: ami-003634241a8fcdec0
+                        IamInstanceProfile: !Ref S3GetInstanceProfile
+                        SecurityGroups:
+                                - Ref: InstanceSecGroup
+
+        WAAutoScaling:
+                Type: AWS::AutoScaling::AutoScalingGroup
+                Properties:
+                        VPCZoneIdentifier:
+                                - Ref: PrivateSubnet1
+                                - Ref: PrivateSubnet2
+                        LaunchConfigurationName: !Ref LaunchConfig
+                        MinSize: "4"                
+                        MaxSize: "5"
+                        TargetGroupARNs:
+                                - Ref: WATargetGroup
+
+        S3Role:
+                Type: AWS::IAM::Role
+                Properties:
+                        RoleName: !Sub ${EnvironmentName}
+                        AssumeRolePolicyDocument:
+                                Version: "2012-10-17"
+                                Statement:
+                                        - Effect: Allow
+                                          Principal:
+                                                  Service:
+                                                          - ec2.amazonaws.com
+                                          Action:
+                                                  - sts:AssumeRole
+                        Path: "/"
+
+        S3ReadOnlyRolePolicy:
+                Type: AWS::IAM::Policy
+                Properties:
+                        PolicyName: !Sub ${EnvironmentName}
+                        Roles:
+                                - Ref: S3Role
+                        PolicyDocument:
+                                Version: "2012-10-17"
+                                Statement:
+                                        - Effect: Allow
+                                          Action:
+                                                 - s3:Get*
+                                                 - s3:List*
+                                          Resource: '*'
+
+        S3GetInstanceProfile:
+                Type: AWS::IAM::InstanceProfile
+                Properties:
+                        Path: "/"
+                        Roles:
+                                - Ref: S3Role
+
+        LBListener:
+                Type: AWS::ElasticLoadBalancingV2::Listener
+                Properties:
+                        DefaultActions:
+                                - Type: forward
+                                  TargetGroupArn: !Ref WATargetGroup
+                        LoadBalancerArn: !Ref WALoadBalancer
+                        Port: 80
+                        Protocol: HTTP
+
+        LBListenerRule:
+                Type: AWS::ElasticLoadBalancingV2::ListenerRule
+                Properties:
+                        Actions:
+                                - Type: forward
+                                  TargetGroupArn: !Ref WATargetGroup
+                        Conditions:
+                                - Field: path-pattern
+                                  Values: [/]
+                        ListenerArn: !Ref LBListener
+                        Priority: 1
+
+        WATargetGroup:
+                Type: AWS::ElasticLoadBalancingV2::TargetGroup
+                Properties:
+                        HealthCheckIntervalSeconds: 60
+                        HealthCheckPath: /
+                        HealthCheckProtocol: HTTP
+                        HealthCheckTimeoutSeconds: 30
+                        HealthyThresholdCount: 2
+                        Port: 80
+                        Protocol: HTTP
+                        UnhealthyThresholdCount: 5
+                        VpcId: !Ref VPC
+                
+
+Outputs:
+
+        LoadBalancerDNSName:
+                Description: DNS Name of the Load Balancer.
+                Value: !Join ["",['http://', !GetAtt WALoadBalancer.DNSName]]
+                Export:
+                        Name: !Sub ${EnvironmentName}-LB-DNS
+        
+
+
+
+
+
+
+                                                  
+
+
+
+
+
